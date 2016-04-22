@@ -32,7 +32,7 @@ class GotoWindowCommand(sublime_plugin.WindowCommand):
         if sublime.platform() == 'osx':
             self._osx_focus()
         elif sublime.platform() == 'linux':
-            self._linux_focus(window_to_move_to)
+            self._linux_focus(window_index)
 
     def focus(self, window_to_move_to):
         active_view = window_to_move_to.active_view()
@@ -80,22 +80,28 @@ class GotoWindowCommand(sublime_plugin.WindowCommand):
 
     # Focus a Sublime window using wmctrl. wmctrl takes the title of the window
     # that will be focused, or part of it.
-    def _linux_focus(self, window_to_move_to):
-        window_variables = window_to_move_to.extract_variables()
-
-        if 'project_base_name' in window_variables:
-            window_title = window_variables['project_base_name']
-        elif 'folder' in window_variables:
-            window_title = os.path.basename(window_variables['folder'])
+    def _linux_focus(self, window_index):
+        pid = str(os.getpid())
+        sublime_window_index = 0
 
         try:
-            Popen(["wmctrl", "-a", window_title + ") - Sublime Text"],
-                    stdout=PIPE, stderr=PIPE)
-        except FileNotFoundError:
+            wmctrl_process = Popen(["wmctrl", "-l", "-p"], stdout=PIPE, stderr=PIPE)
+
+        except EnvironmentError:
             msg = "`wmctrl` is required by GotoWindow but was not found on " \
                   "your system. Please install it and try again."
             sublime.error_message(msg)
 
+        else:
+            for line in wmctrl_process.stdout.readlines():
+                if len(line.split(pid)) > 1:
+                    wmctrl_hex = line.split()[0]
+
+                    if sublime_window_index == window_index:
+                        Popen(["wmctrl", "-a", wmctrl_hex, "-i"])
+                        return
+                    else:
+                        sublime_window_index += 1
 
     def _get_current_index(self):
         active_window = sublime.active_window()
